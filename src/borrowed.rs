@@ -3,8 +3,8 @@ use crate::{ascending::Ascending, descending::Descending, inner::Inner};
 /// A borrowed set of natural numbers.
 #[derive(Clone, Copy)]
 pub struct Borrowed<'data> {
-	data: &'data [Inner],
-	len: usize,
+	pub(crate) data: &'data [Inner],
+	pub(crate) len: usize,
 }
 
 impl<'data> Borrowed<'data> {

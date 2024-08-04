@@ -162,6 +162,17 @@ impl Owned {
 
 		unsafe { self.insert(value).unwrap_unchecked() }
 	}
+
+	/// Clones the data from `source` without allocating if possible.
+	#[inline]
+	pub fn clone_from_slice(&mut self, source: Borrowed) {
+		self.with_buffer(move |data| {
+			data.clear();
+			data.extend_from_slice(source.data);
+		});
+
+		self.len = source.len;
+	}
 }
 
 impl Default for Owned {
@@ -182,12 +193,9 @@ impl Clone for Owned {
 
 	#[inline]
 	fn clone_from(&mut self, source: &Self) {
-		self.with_buffer(move |data| {
-			data.clear();
-			data.extend_from_slice(&source.data);
-		});
+		let source = source.as_slice();
 
-		self.len = source.len;
+		self.clone_from_slice(source);
 	}
 }
 
