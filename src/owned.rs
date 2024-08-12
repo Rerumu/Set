@@ -80,9 +80,24 @@ impl Owned {
 	/// Removes all values from the set in bulk.
 	#[inline]
 	pub fn clear(&mut self) {
-		self.len = 0;
+		let mut position = 0;
+		let mut removed = 0;
 
-		self.data.fill(0);
+		// SAFETY: The pointer must be valid as long as we still have
+		// bits within the buffer that are ones.
+		while removed < self.len {
+			let data = unsafe { self.data.get_unchecked_mut(position) };
+
+			if *data != 0 {
+				removed += data.count_ones() as usize;
+
+				*data = 0;
+			}
+
+			position += 1;
+		}
+
+		self.len = 0;
 	}
 
 	#[inline(never)]
