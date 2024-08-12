@@ -184,6 +184,10 @@ impl Owned {
 		self.with_buffer(move |data| {
 			data.clear();
 			data.extend_from_slice(source.data);
+
+			data.resize(data.capacity(), 0);
+
+			debug_assert_eq!(data.len(), data.capacity(), "buffer should not reallocate");
 		});
 
 		self.len = source.len;
