@@ -152,6 +152,39 @@ impl Owned {
 		})
 	}
 
+	fn insert_chunk(&mut self, offset: usize) -> Option<Inner> {
+		self.data.get_mut(offset).map(|inner| {
+			let zeros = inner.count_zeros();
+
+			self.len += usize::try_from(zeros).unwrap();
+
+			core::mem::replace(inner, Inner::MAX)
+		})
+	}
+
+	/// Inserts the given exclusive range into the set.
+	pub fn insert_all(&mut self, start: usize, end: usize) -> Option<()> {
+		let start_chunk = crate::inner::bits_to_chunk(start);
+		let naive_end = crate::inner::chunk_to_bits(start_chunk + 1).min(end);
+
+		for value in start..naive_end {
+			self.insert(value)?;
+		}
+
+		let end_chunk = crate::inner::bits_to_chunk(end);
+		let naive_start = crate::inner::chunk_to_bits(end_chunk).max(start);
+
+		for value in naive_start..end {
+			self.insert(value)?;
+		}
+
+		for offset in start_chunk + 1..end_chunk {
+			self.insert_chunk(offset)?;
+		}
+
+		Some(())
+	}
+
 	/// Removes the given index from the set and returns the previous state.
 	#[inline]
 	pub fn remove(&mut self, value: usize) -> Option<bool> {
@@ -170,12 +203,53 @@ impl Owned {
 		})
 	}
 
+	fn remove_chunk(&mut self, offset: usize) -> Option<Inner> {
+		self.data.get_mut(offset).map(|inner| {
+			let ones = inner.count_ones();
+
+			self.len -= usize::try_from(ones).unwrap();
+
+			core::mem::replace(inner, Inner::MIN)
+		})
+	}
+
+	/// Removes the given exclusive range from the set.
+	pub fn remove_all(&mut self, start: usize, end: usize) -> Option<()> {
+		let start_chunk = crate::inner::bits_to_chunk(start);
+		let naive_end = crate::inner::chunk_to_bits(start_chunk + 1).min(end);
+
+		for value in start..naive_end {
+			self.remove(value)?;
+		}
+
+		let end_chunk = crate::inner::bits_to_chunk(end);
+		let naive_start = crate::inner::chunk_to_bits(end_chunk).max(start);
+
+		for value in naive_start..end {
+			self.remove(value)?;
+		}
+
+		for offset in start_chunk + 1..end_chunk {
+			self.remove_chunk(offset)?;
+		}
+
+		Some(())
+	}
+
 	/// Inserts the given index into the set and returns the previous state.
 	#[inline]
 	pub fn grow_insert(&mut self, value: usize) -> bool {
 		self.grow_maximum(value + 1);
 
 		unsafe { self.insert(value).unwrap_unchecked() }
+	}
+
+	/// Inserts the given exclusive range into the set.
+	#[inline]
+	pub fn grow_insert_all(&mut self, start: usize, end: usize) {
+		self.grow_maximum(end);
+
+		unsafe { self.insert_all(start, end).unwrap_unchecked() };
 	}
 
 	/// Clones the data from `source` without allocating if possible.
@@ -255,7 +329,9 @@ impl FromIterator<usize> for Owned {
 	fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
 		let mut set = Self::new();
 
-		set.extend(iter);
+		iter.into_iter().for_each(|index| {
+			set.grow_insert(index);
+		});
 
 		set
 	}
@@ -293,6 +369,25 @@ mod test {
 		assert!(
 			set.descending().eq(list.iter().copied().rev()),
 			"descending list should be ordered"
+		);
+	}
+
+	#[test]
+	fn bulk_operation() {
+		let mut set = Owned::new();
+
+		set.grow_insert_all(30, 300);
+
+		assert!(
+			(30..300).eq(set.ascending()),
+			"insertion should have succeeded"
+		);
+
+		set.remove_all(60, 240).unwrap();
+
+		assert!(
+			(30..60).chain(240..300).eq(set.ascending()),
+			"insertion should have succeeded"
 		);
 	}
 }
